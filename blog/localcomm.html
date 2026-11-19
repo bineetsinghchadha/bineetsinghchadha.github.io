@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="Bineet Singh Chadha">
+    <meta name="description" content="A zero-configuration command-line tool where machines discover each other over mDNS and talk over TCP.">
+    <title>localcomm: finding and messaging devices on a LAN in async Rust | Bineet Singh Chadha</title>
+    <link rel="stylesheet" href="blog.css">
+</head>
+<body>
+    <header class="header">
+        <nav class="nav">
+            <a href="../index.html" class="logo">Bineet Singh</a>
+            <ul class="nav-links">
+                <li><a href="../index.html#about">About</a></li>
+                <li><a href="../index.html#experience">Experience</a></li>
+                <li><a href="../index.html#projects">Projects</a></li>
+                <li><a href="index.html">Blog</a></li>
+                <li><a href="../index.html#contact">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main class="page">
+        <article>
+            <h1 class="page-title">localcomm: finding and messaging devices on a LAN in async Rust</h1>
+            <p class="article-meta">Started February 2026 &middot; Work in progress</p>
+            <div class="tags"><span class="tag">Rust</span><span class="tag">Tokio</span><span class="tag">mDNS</span><span class="tag">TCP</span></div>
+            <div class="article">
+<p class="lead">Two laptops on the same Wi-Fi are a few milliseconds apart, yet sending a note between them usually means a round trip through someone's cloud. localcomm is a small command-line tool that lets machines on a local network find each other and exchange messages directly, with no server and no configuration.</p>
+
+<h2>Background</h2>
+<p>I wanted a project that would make me learn async Rust properly, and networking is where async earns its keep. The problem also has a nice first obstacle: before two machines can talk, one has to learn the other's address. Typing IP addresses is exactly the kind of setup I wanted to avoid.</p>
+<p>The standard answer is <strong>mDNS with DNS-SD</strong>, the mechanism behind printer discovery and Chromecast device lists. A device announces a named service on the local network, and anyone browsing for that service type gets its address and port.</p>
+
+<h2>What it does today</h2>
+<div class="table-wrap">
+<table>
+    <thead><tr><th>Command</th><th>What it does</th><th>Status</th></tr></thead>
+    <tbody>
+        <tr><td><code>serve</code></td><td>Listens for messages and advertises itself over mDNS</td><td>Working</td></tr>
+        <tr><td><code>discover</code></td><td>Lists localcomm devices on the network</td><td>Working</td></tr>
+        <tr><td><code>send</code></td><td>Sends one text message to a device</td><td>Working</td></tr>
+        <tr><td><code>transfer</code></td><td>Streams a file in chunks with a checksum</td><td>Written, not yet wired into the CLI</td></tr>
+        <tr><td><code>chat</code>, <code>list</code>, <code>tui</code></td><td>Interactive chat, saved devices, terminal UI</td><td>Planned</td></tr>
+    </tbody>
+</table>
+</div>
+
+<h2>Approach</h2>
+<h3>Discovery</h3>
+<p>A server registers the service type <code>_localcomm._tcp.local.</code> with its port and a few TXT properties (device name, version). A client browses for that type until a timeout expires and collects every service that resolves. I used the <code>mdns-sd</code> crate for the protocol itself.</p>
+
+<h3>Wire format</h3>
+<p>Messages are JSON objects, one per line:</p>
+<pre><code>{"id":"5f0c3a8e-...","type":"text","from":"machine-b",
+ "to":"192.168.1.42:8080","content":"hello","timestamp":1790479705,"metadata":{}}</code></pre>
+<p>Newline-delimited JSON is not the most compact choice, but it is easy to debug: you can talk to the server with <code>nc</code> and read the traffic by eye. The <code>type</code> field already covers file chunks, heartbeats and acknowledgements, so the format will not need to change as those features arrive.</p>
+
+<h3>Concurrency</h3>
+<p>The server has one accept loop. Each accepted connection gets its own Tokio task, which reads lines, parses them, and sends each message into an <code>mpsc</code> channel. A single handler at the other end of the channel prints messages in order.</p>
+<p>The appeal of this shape is that no state is shared between connections, so there are no locks. Every connection owns its socket and its buffer, and the channel is the only meeting point.</p>
+
+<h3>File transfer</h3>
+<p>The transfer path sends a small header (file name and size) and then the file in 64 KB chunks. Both sides feed the bytes through SHA-256 as they stream, so a large file never has to fit in memory.</p>
+
+<h2>What I learned</h2>
+<ul>
+    <li><strong>Framing is a real decision.</strong> TCP delivers a stream of bytes, not messages. Line-delimiting works for JSON text but not for raw file bytes, which is why the transfer path uses a header with an explicit length.</li>
+    <li><strong>An unbounded channel has no backpressure.</strong> If senders outpace the handler, memory grows. A bounded channel would make a fast sender wait, which is the behaviour I want.</li>
+    <li><strong>Ownership shapes the design.</strong> Moving each socket into its own task was the path of least resistance in Rust, and it turned out to be the cleanest design too.</li>
+</ul>
+
+<h2>Next</h2>
+<ul>
+    <li>Wire <code>transfer</code> into the CLI, send the checksum to the receiver, and verify it.</li>
+    <li>Add heartbeats and acknowledgements so a sender knows a message arrived.</li>
+    <li>Address devices by name, resolved through mDNS, instead of by <code>host:port</code>.</li>
+    <li>Encrypt the traffic. It is currently unencrypted and unauthenticated, so it should only be used on a network you trust.</li>
+</ul>
+            </div>
+            <div class="article-links">
+                <a class="btn" href="https://github.com/bineetsinghchadha/localcomm">Code on GitHub</a>
+                <a class="btn" href="index.html">All posts</a>
+            </div>
+        </article>
+    </main>
+    <footer class="footer">
+        <p>&copy; 2026 Bineet Singh Chadha</p>
+    </footer>
+</body>
+</html>

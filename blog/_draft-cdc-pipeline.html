@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="Bineet Singh Chadha">
+    <meta name="description" content="Draft. Not linked from the site.">
+    <title>Case study: taking a loan-application pipeline from 60% to 99.99% uptime | Bineet Singh Chadha</title>
+    <link rel="stylesheet" href="blog.css">
+</head>
+<body>
+    <header class="header">
+        <nav class="nav">
+            <a href="../index.html" class="logo">Bineet Singh</a>
+            <ul class="nav-links">
+                <li><a href="../index.html#about">About</a></li>
+                <li><a href="../index.html#experience">Experience</a></li>
+                <li><a href="../index.html#projects">Projects</a></li>
+                <li><a href="index.html">Blog</a></li>
+                <li><a href="../index.html#contact">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main class="page">
+        <article>
+            <h1 class="page-title">Case study: taking a loan-application pipeline from 60% to 99.99% uptime</h1>
+            <p class="article-meta">DRAFT &middot; Bajaj Finance, 2022 to 2025</p>
+            <div class="tags"><span class="tag">C#</span><span class="tag">Azure Cosmos DB</span><span class="tag">Change feed</span><span class="tag">Salesforce</span></div>
+            <div class="article">
+<div class="note"><p><strong>Draft, not published.</strong> GitHub Pages does not serve files whose names start with an underscore. Before publishing: confirm that Bajaj Finance is comfortable with this level of detail, fill in the two marked gaps, then rename the file to <code>cdc-pipeline.html</code> and add it to the blog index.</p></div>
+
+<p class="lead">For three years I owned the pipeline that carried online loan applications from our first data store into Salesforce. When I inherited it, it was up 60 to 70% of the time. When I left, it had run at 99.99% while handling more than a million events a day.</p>
+
+<h2>Background</h2>
+<p>At Bajaj Finance, every form a customer filled in on the app, the website or a partner channel was written to a Cosmos DB database we called the Acquisition ODS. It was the first data layer for all online business. Sales teams, however, worked in Salesforce, so every event had to arrive there, in order and in the shape each business line expected.</p>
+<p>The pipeline between the two was a C# service. It fed 10 to 20% of all online loan applications, so an hour of downtime was an hour of applications that sales could not see.</p>
+
+<h2>What made it hard</h2>
+<ul>
+    <li><strong>Order matters per customer.</strong> A customer fills in a form over several steps. If step three reaches Salesforce before step two, the record is wrong.</li>
+    <li><strong>Many products, many rules.</strong> There were about 150 loan product variants across 15 major businesses. Roughly 400 fields needed some transformation: a type change, a rename, a derived value, or a lookup against master data.</li>
+    <li><strong>Requirements kept moving.</strong> Each business changed its fields on its own schedule, and old events still had to be processed correctly.</li>
+</ul>
+
+<h2>Approach</h2>
+<h3>Micro-batches, binned by customer</h3>
+<p>The service reads the Cosmos DB change feed in small batches. Each batch is split into bins by the customer's mobile number, and the bins are processed in parallel. Inside a bin, events are sorted by the server timestamp Cosmos DB assigns on write.</p>
+<p>This gives ordering where it is needed, per customer, without giving up parallelism across customers. Processing everything strictly in order would have been correct and far too slow.</p>
+
+<h3>Rules that survive change</h3>
+<p>I also acted as the project's product manager, meeting each business to turn its needs into transformation rules. Rules were written to be backward and forward compatible, so a new field for one product could not break another product or an older event.</p>
+
+<h3>Making failures visible</h3>
+<p>I built monitoring that recorded every failure with enough context to trace it to a specific event and rule. That framework was later reused by other teams.</p>
+<div class="note"><p><strong>Gap 1:</strong> describe the specific changes that raised uptime (for example retries, handling of poison events, checkpointing, alert rules). I do not have these details.</p></div>
+
+<h3>From polling to push</h3>
+<p>While reading API gateway logs, I noticed that clients were polling the cart data in the same database far more often than it changed. I took the finding to the API team's leadership and we moved the cart to a push model driven by the change feed, so updates are sent when a record is created, updated or deleted.</p>
+
+<h2>Result</h2>
+<ul>
+    <li>Uptime rose from 60 to 70% to 99.99% over about 15 months.</li>
+    <li>The service handled more than 1 million events a day.</li>
+</ul>
+<div class="note"><p><strong>Gap 2:</strong> add what you would do differently if you rebuilt it today.</p></div>
+            </div>
+            <div class="article-links">
+
+                <a class="btn" href="index.html">All posts</a>
+            </div>
+        </article>
+    </main>
+    <footer class="footer">
+        <p>&copy; 2026 Bineet Singh Chadha</p>
+    </footer>
+</body>
+</html>

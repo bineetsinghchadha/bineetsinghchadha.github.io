@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="Bineet Singh Chadha">
+    <meta name="description" content="Delegation Capability Tokens as a Solidity contract, driven by a LangChain multi-agent pipeline running on local models.">
+    <title>An on-chain audit trail for AI agents that delegate to each other | Bineet Singh Chadha</title>
+    <link rel="stylesheet" href="blog.css">
+</head>
+<body>
+    <header class="header">
+        <nav class="nav">
+            <a href="../index.html" class="logo">Bineet Singh</a>
+            <ul class="nav-links">
+                <li><a href="../index.html#about">About</a></li>
+                <li><a href="../index.html#experience">Experience</a></li>
+                <li><a href="../index.html#projects">Projects</a></li>
+                <li><a href="index.html">Blog</a></li>
+                <li><a href="../index.html#contact">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main class="page">
+        <article>
+            <h1 class="page-title">An on-chain audit trail for AI agents that delegate to each other</h1>
+            <p class="article-meta">Project period: Spring 2026</p>
+            <div class="tags"><span class="tag">Solidity</span><span class="tag">Hardhat</span><span class="tag">Python</span><span class="tag">LangChain</span><span class="tag">Ollama</span></div>
+            <div class="article">
+<p class="lead">When one AI agent hands a task to another, and that agent hands part of it to a third, who authorized what? This project records every delegation and every action on a blockchain, and makes the contract itself refuse any delegation that grants more authority than the delegator holds.</p>
+
+<h2>Background</h2>
+<p>Multi-agent systems split work: a manager agent plans, worker agents write code, a tester checks it. If something goes wrong, you want to reconstruct the chain of responsibility. Application logs can do that, but only if you trust whoever runs the log.</p>
+<p>The paper <em>Intelligent AI Delegation</em> (Tomasev et al., 2026) proposes <strong>Delegation Capability Tokens</strong> (DCTs): a token that records who delegated which scope of authority to whom. I implemented the idea as a smart contract and connected it to a working agent pipeline.</p>
+
+<h2>What it does</h2>
+<pre><code>Human principal
+   |  mints a MANAGE token
+   v
+Manager agent  -- splits the task in two
+   |-- mints a CODE token --&gt; Coder A  (writes module_a.py)
+   |-- mints a CODE token --&gt; Coder B  (writes module_b.py)
+   |
+   |  both finish; manager mints a TEST token
+   v
+Tester agent  -- runs pytest, logs pass or fail on-chain</code></pre>
+<p>The two coder agents run in parallel. Every delegation, action and result is written to the chain, and the full history can be rebuilt from any token by walking up to the root.</p>
+
+<h2>Approach</h2>
+<h3>The contract</h3>
+<p><code>DelegationRegistry.sol</code> stores each token with its parent, delegator, delegatee, scope, task description, expiry, and revoked and completed flags. Its main functions:</p>
+<div class="table-wrap">
+<table>
+    <thead><tr><th>Function</th><th>Purpose</th></tr></thead>
+    <tbody>
+        <tr><td><code>mintRoot</code></td><td>The human issues the root MANAGE token</td></tr>
+        <tr><td><code>delegate</code></td><td>A token holder issues a child token with a narrower scope</td></tr>
+        <tr><td><code>recordAction</code></td><td>A holder logs an action against its own active token</td></tr>
+        <tr><td><code>complete</code>, <code>revoke</code></td><td>Close a token normally, or withdraw it</td></tr>
+        <tr><td><code>getChain</code></td><td>Return the delegation chain from a token up to the root</td></tr>
+    </tbody>
+</table>
+</div>
+
+<h3>Scope as an ordered enum</h3>
+<p>Scope is an enum ordered from broadest to narrowest: <code>MANAGE</code> (0), <code>CODE</code> (1), <code>TEST</code> (2). That turns the central rule, that nobody can grant more authority than they hold, into one integer comparison inside <code>delegate</code>:</p>
+<pre><code>require(uint8(scope) &gt; uint8(parent.scope), "Scope escalation denied");</code></pre>
+<p>Because the check lives in the contract, an agent that is buggy or compromised cannot talk its way past it. The transaction simply reverts. The same function also rejects delegation from tokens that are revoked, completed or expired.</p>
+
+<h3>The agents</h3>
+<p>The agents are LangChain programs running on a local model through Ollama, so the whole pipeline works without API keys. Each agent has its own wallet. A small Python client wraps the contract calls, and the agents call it at each step: when they receive a task, delegate, write code, or report a test result.</p>
+
+<h3>Running it</h3>
+<p>Locally it runs against a Hardhat node. It also deploys to the Sepolia test network, and a browser dashboard reads the delegation tree and the action log straight from the chain.</p>
+
+<h2>Design decisions</h2>
+<ul>
+    <li><strong>Why a blockchain and not a database?</strong> The agents in a pipeline may belong to different operators who do not trust each other. A database needs a trusted owner. A public ledger does not, and nobody can rewrite it afterwards.</li>
+    <li><strong>Why enforce scope on-chain?</strong> An application-level check protects only the applications that remember to run it. A contract-level check applies to every caller.</li>
+    <li><strong>Why fan-out delegation?</strong> Two parallel coders show that one parent can hold several independent child tokens, each with its own action log and completion state.</li>
+</ul>
+
+<h2>Limits</h2>
+<ul>
+    <li><strong>Cost and latency.</strong> Every logged action is a transaction. On a public chain that costs gas and takes seconds, so a chatty agent would be expensive. Logging hashes of actions instead of full text would cut the cost.</li>
+    <li><strong>The log proves what was recorded, not what happened.</strong> An agent could act without logging. Closing that gap needs the execution environment to require a valid token before it runs anything.</li>
+    <li><strong>Three scopes are a demonstration.</strong> Real systems would need a richer permission model than a single ordered list.</li>
+</ul>
+            </div>
+            <div class="article-links">
+                <a class="btn" href="https://github.com/bineetsinghchadha/DCT-Project">Code on GitHub</a>
+                <a class="btn" href="index.html">All posts</a>
+            </div>
+        </article>
+    </main>
+    <footer class="footer">
+        <p>&copy; 2026 Bineet Singh Chadha</p>
+    </footer>
+</body>
+</html>

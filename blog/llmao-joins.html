@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="Bineet Singh Chadha">
+    <meta name="description" content="A semantic join operator that uses cheap similarity signals first and asks an LLM only about the pairs it can&#x27;t decide.">
+    <title>LLMao Joins: joining tables when the values don&#x27;t match | Bineet Singh Chadha</title>
+    <link rel="stylesheet" href="blog.css">
+</head>
+<body>
+    <header class="header">
+        <nav class="nav">
+            <a href="../index.html" class="logo">Bineet Singh</a>
+            <ul class="nav-links">
+                <li><a href="../index.html#about">About</a></li>
+                <li><a href="../index.html#experience">Experience</a></li>
+                <li><a href="../index.html#projects">Projects</a></li>
+                <li><a href="index.html">Blog</a></li>
+                <li><a href="../index.html#contact">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main class="page">
+        <article>
+            <h1 class="page-title">LLMao Joins: joining tables when the values don't match</h1>
+            <p class="article-meta">Project period: Fall 2025 &middot; Team of three, NYU Big Data course</p>
+            <div class="tags"><span class="tag">Python</span><span class="tag">Neo4j</span><span class="tag">Sentence-Transformers</span><span class="tag">OpenAI API</span></div>
+            <div class="article">
+<p class="lead">A SQL join matches rows only when the join values are identical. Real tables rarely cooperate: one says <code>USA</code>, the other says <code>United States of America</code>. LLMao Joins is a join operator that finds those matches without sending every pair of values to a language model.</p>
+
+<h2>Background</h2>
+<p>There are two usual ways to join messy columns, and each fails in its own way.</p>
+<ul>
+    <li><strong>Fuzzy matching</strong> compares spelling. It catches <code>Microsft</code> and <code>Microsoft</code>, but it has no idea that <code>IBM</code> and <code>International Business Machines</code> are the same company.</li>
+    <li><strong>Asking an LLM</strong> handles meaning, but a join between two columns of 10,000 values has 100 million possible pairs. Checking them all is slow and expensive.</li>
+</ul>
+<p>Our idea was a funnel. Cheap methods propose candidate pairs and score them. Pairs that are clearly matches or clearly not are decided on the spot. Only the uncertain middle goes to the LLM, under a fixed budget.</p>
+<p>I built this with Aayush Shah and Kai Kang. My part was the front of the funnel: normalization, the similarity features, the value-matching module, and the step that sorts pairs into confidence bands.</p>
+
+<h2>How the pipeline works</h2>
+<ol>
+    <li><strong>Normalize.</strong> Lowercase the text, strip accents and punctuation, drop a leading "the", collapse whitespace, and expand abbreviations. The abbreviation list can be supplied as a CSV, so a finance dataset and a geography dataset can each bring their own.</li>
+    <li><strong>Generate candidates.</strong> Three generators run and their results are merged:
+        <ul>
+            <li>a rule generator, which pairs values whose normalized forms are identical;</li>
+            <li>a string generator, which builds TF-IDF vectors over character 3-grams and keeps each value's 20 nearest neighbours above 0.6 cosine similarity;</li>
+            <li>an embedding generator, which encodes values with the MiniLM sentence-transformer and keeps the 10 nearest above 0.55.</li>
+        </ul>
+    </li>
+    <li><strong>Extract features.</strong> Each candidate pair gets Levenshtein similarity, Jaro-Winkler, n-gram Jaccard and a MinHash estimate, alongside the scores from the generators.</li>
+    <li><strong>Score.</strong> The signals are combined into one weighted score between 0 and 1. A signal a pair doesn't have is left out of the average instead of counting as zero.</li>
+    <li><strong>Sort into bands.</strong> High scores are accepted, low scores are rejected, and the band in between is marked uncertain.</li>
+    <li><strong>Ask the LLM about the uncertain band.</strong> Each uncertain pair becomes one strict yes-or-no question to <code>gpt-4o-mini</code> at temperature 0. The number of questions is capped, and the run logs calls, tokens and estimated cost.</li>
+    <li><strong>Build the alias graph.</strong> Every value becomes a node in Neo4j and every scored pair an edge. We export the accepted edges and run weighted label propagation to find clusters of values that mean the same thing.</li>
+    <li><strong>Join on cluster id.</strong> Rows from the two tables join when their values fall in the same cluster.</li>
+</ol>
+
+<h2>Why a graph</h2>
+<p>Pairwise matching treats every pair on its own. A graph adds two things.</p>
+<ul>
+    <li><strong>Transitive matches.</strong> If <code>U.S.</code> matches <code>USA</code> and <code>USA</code> matches <code>United States of America</code>, all three land in one cluster even though the first and last were never compared directly.</li>
+    <li><strong>Memory.</strong> The graph persists between runs. A match the LLM confirmed once does not have to be paid for again on the next dataset.</li>
+</ul>
+<p>It also makes the result explainable. For any joined row you can show the path of edges, and the signals behind each edge, that connected the two values.</p>
+
+<h2>Evaluation</h2>
+<p>We compared against Auto-FuzzyJoin on its own benchmark datasets, measuring precision, recall and F1 along with running time and LLM cost per run. The benchmark runner in the repository reproduces the comparison.</p>
+
+<h2>What I would change</h2>
+<ul>
+    <li><strong>Measure candidate recall directly.</strong> A true match that the generators miss can never be recovered later, so recall at the candidate stage deserves its own number.</li>
+    <li><strong>Try BM25 over character n-grams,</strong> fused with the embedding ranks. It is a cheap first stage that tends to catch rare tokens such as codes and proper nouns.</li>
+    <li><strong>Learn the weights.</strong> The scoring weights are set by hand. A small labelled sample would let us fit them.</li>
+</ul>
+            </div>
+            <div class="article-links">
+                <a class="btn" href="https://github.com/bineetsinghchadha/llmao-joins">Code on GitHub</a>
+                <a class="btn" href="index.html">All posts</a>
+            </div>
+        </article>
+    </main>
+    <footer class="footer">
+        <p>&copy; 2026 Bineet Singh Chadha</p>
+    </footer>
+</body>
+</html>

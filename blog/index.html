@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="Bineet Singh Chadha">
+    <meta name="description" content="Project write-ups by Bineet Singh Chadha.">
+    <title>Blog | Bineet Singh Chadha</title>
+    <link rel="stylesheet" href="blog.css">
+</head>
+<body>
+    <header class="header">
+        <nav class="nav">
+            <a href="../index.html" class="logo">Bineet Singh</a>
+            <ul class="nav-links">
+                <li><a href="../index.html#about">About</a></li>
+                <li><a href="../index.html#experience">Experience</a></li>
+                <li><a href="../index.html#projects">Projects</a></li>
+                <li><a href="index.html" aria-current="page">Blog</a></li>
+                <li><a href="../index.html#contact">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main class="page">
+        <h1 class="page-title">Blog</h1>
+        <p class="page-intro">Write-ups of projects I've built: the problem, what the project does, and how I approached it.</p>
+        <ul class="post-list">
+            <li>
+                <a class="post-card" href="llmao-joins.html">
+                    <h2>LLMao Joins: joining tables when the values don't match</h2>
+                    <p class="post-meta">Project period: Fall 2025 &middot; Team of three, NYU Big Data course</p>
+                    <p>A semantic join operator that uses cheap similarity signals first and asks an LLM only about the pairs it can't decide.</p>
+                </a>
+            </li>
+            <li>
+                <a class="post-card" href="localcomm.html">
+                    <h2>localcomm: finding and messaging devices on a LAN in async Rust</h2>
+                    <p class="post-meta">Started February 2026 &middot; Work in progress</p>
+                    <p>A zero-configuration command-line tool where machines discover each other over mDNS and talk over TCP.</p>
+                </a>
+            </li>
+            <li>
+                <a class="post-card" href="dct.html">
+                    <h2>An on-chain audit trail for AI agents that delegate to each other</h2>
+                    <p class="post-meta">Project period: Spring 2026</p>
+                    <p>Delegation Capability Tokens as a Solidity contract, driven by a LangChain multi-agent pipeline running on local models.</p>
+                </a>
+            </li>
+            <li>
+                <a class="post-card" href="datafusion-variant.html">
+                    <h2>Writing a typed Variant getter for DataFusion</h2>
+                    <p class="post-meta">March 2026 &middot; Fork of datafusion-contrib/datafusion-variant</p>
+                    <p>Implementing variant_get_bool as a DataFusion scalar function, and what I learned when upstream shipped its own a few days later.</p>
+                </a>
+            </li>
+        </ul>
+    </main>
+    <footer class="footer">
+        <p>&copy; 2026 Bineet Singh Chadha</p>
+    </footer>
+</body>
+</html>

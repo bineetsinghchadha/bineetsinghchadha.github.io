@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="Bineet Singh Chadha">
+    <meta name="description" content="Implementing variant_get_bool as a DataFusion scalar function, and what I learned when upstream shipped its own a few days later.">
+    <title>Writing a typed Variant getter for DataFusion | Bineet Singh Chadha</title>
+    <link rel="stylesheet" href="blog.css">
+</head>
+<body>
+    <header class="header">
+        <nav class="nav">
+            <a href="../index.html" class="logo">Bineet Singh</a>
+            <ul class="nav-links">
+                <li><a href="../index.html#about">About</a></li>
+                <li><a href="../index.html#experience">Experience</a></li>
+                <li><a href="../index.html#projects">Projects</a></li>
+                <li><a href="index.html">Blog</a></li>
+                <li><a href="../index.html#contact">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main class="page">
+        <article>
+            <h1 class="page-title">Writing a typed Variant getter for DataFusion</h1>
+            <p class="article-meta">March 2026 &middot; Fork of datafusion-contrib/datafusion-variant</p>
+            <div class="tags"><span class="tag">Rust</span><span class="tag">Apache DataFusion</span><span class="tag">Arrow</span><span class="tag">Parquet Variant</span></div>
+            <div class="article">
+<p class="lead">I wanted to understand how a query engine exposes a function to SQL, so I implemented one: <code>variant_get_bool</code> for the <code>datafusion-variant</code> crate. My branch was not merged, because the maintainers landed their own implementation a few days later. The exercise was still worth writing up.</p>
+
+<h2>Background</h2>
+<p><strong>Variant</strong> is a binary encoding for semi-structured data, the kind you would otherwise store as a JSON string. It is part of the Parquet and Iceberg specifications and is supported by Spark and Databricks. Compared with JSON text, a query can jump to one field without parsing the whole document.</p>
+<p><a href="https://github.com/datafusion-contrib/datafusion-variant">datafusion-variant</a> adds Variant functions to Apache DataFusion, a query engine written in Rust, and aims to match the functions Spark offers. When I looked at it, <code>variant_get_int</code> had just been added and the boolean getter was missing.</p>
+
+<h2>What the function does</h2>
+<p><code>variant_get_bool(variant, path)</code> returns the value at <code>path</code> as a SQL boolean.</p>
+<pre><code>select variant_get_bool(json_to_variant('{"name": "Alice", "active": true}'), 'active');
+-- true</code></pre>
+<p>The edge cases are the real specification:</p>
+<ul>
+    <li>a boolean at the path is returned as it is;</li>
+    <li>a value of any other type (string, number, array, object) returns <code>NULL</code>;</li>
+    <li>a path that does not exist returns <code>NULL</code>.</li>
+</ul>
+
+<h2>Approach</h2>
+<p>In DataFusion a scalar function is a type that implements the <code>ScalarUDFImpl</code> trait. The trait asks for a name, a signature, a return type, and an <code>invoke_with_args</code> method that does the work.</p>
+<ul>
+    <li><strong>Signature.</strong> Two arguments of any type, marked immutable so the planner knows the same input always gives the same output.</li>
+    <li><strong>Return type.</strong> Always <code>Boolean</code>.</li>
+    <li><strong>Invocation.</strong> The crate has a shared helper for typed getters that handles path lookup and the scalar-versus-array cases. My function supplies three small pieces: how to build a scalar result, how to build an Arrow <code>BooleanArray</code> from a column of results, and how to extract a boolean from a single Variant value.</li>
+</ul>
+<p>That last piece is one line, because the Variant type already has an <code>as_boolean</code> accessor that returns <code>None</code> for non-booleans. Reusing the shared helper kept the function to the parts that are specific to booleans.</p>
+
+<h3>Tests</h3>
+<p>I wrote unit tests for true, false, a missing path and array inputs, plus a <code>sqllogictest</code> file. That format pairs SQL statements with their expected output, so the function is tested through the same path a user would take:</p>
+<pre><code>query B
+select variant_get_bool(json_to_variant(json_str), 'active') from json_data;
+----
+true
+false
+NULL</code></pre>
+
+<h2>What happened</h2>
+<p>I finished my branch on 21 March 2026. On 24 March the maintainers merged their own <code>variant_get_bool</code>, so mine was not needed.</p>
+
+<h2>What I learned</h2>
+<ul>
+    <li><strong>Claim the work first.</strong> The project tracks missing functions in an issue. A one-line comment saying "I'm taking this" would have avoided the duplicate effort.</li>
+    <li><strong>Scalars and arrays are two paths.</strong> A function can be called with a constant or with a column, and it has to handle both. The shared helper hides this, and reading it taught me more than writing my own function did.</li>
+    <li><strong>Null handling is most of the design.</strong> The happy path was one line. The decisions were all about what to return when the type or the path is wrong.</li>
+    <li><strong>Small functions are a good way into a large codebase.</strong> I now know my way around the crate well enough to pick up something bigger.</li>
+</ul>
+            </div>
+            <div class="article-links">
+                <a class="btn" href="https://github.com/bineetsinghchadha/datafusion-variant/tree/variant_get_bool_impl">My branch on GitHub</a>
+                <a class="btn" href="index.html">All posts</a>
+            </div>
+        </article>
+    </main>
+    <footer class="footer">
+        <p>&copy; 2026 Bineet Singh Chadha</p>
+    </footer>
+</body>
+</html>
